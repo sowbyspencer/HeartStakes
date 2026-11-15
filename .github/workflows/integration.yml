@@ -1,8 +1,10 @@
 name: Minecraft integration tests
 
 on:
-  push:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -15,6 +17,7 @@ jobs:
     timeout-minutes: 3
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         include:
           - minecraft: 1.21.7
