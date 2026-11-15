@@ -1,0 +1,7 @@
+{
+  "env": {
+    "exclude": [
+      "data/heartstakes/test/**/*.mcfunction"
+    ]
+  }
+}
