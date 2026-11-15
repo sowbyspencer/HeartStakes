@@ -12,7 +12,6 @@ say [HeartStakesTest] player_isolation: peer health set
 await delay 1t
 scoreboard players set @s hs_deaths 1
 say [HeartStakesTest] player_isolation: death trigger set
-await delay 1t
 function heartstakes:on_death
 say [HeartStakesTest] player_isolation: death function returned
 await delay 1t

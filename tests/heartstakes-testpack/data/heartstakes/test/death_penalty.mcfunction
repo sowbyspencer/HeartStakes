@@ -7,7 +7,6 @@ say [HeartStakesTest] death_penalty: base health set
 await delay 1t
 scoreboard players set @s hs_deaths 1
 say [HeartStakesTest] death_penalty: death trigger set
-await delay 1t
 function heartstakes:on_death
 say [HeartStakesTest] death_penalty: death function returned
 await delay 1t
