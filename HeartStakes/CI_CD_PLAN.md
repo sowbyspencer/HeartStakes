@@ -2,6 +2,8 @@
 
 This plan describes a GitHub Actions pipeline for validating and publishing the HeartStakes Minecraft Java Edition datapack.
 
+The integration-test implementation uses the server-side Fabric [PackTest](https://modrinth.com/mod/packtest) mod. PackTest provides `.mcfunction` tests, assertions, dummy players, automatic test execution, and a nonzero process exit code when a test fails. The test-only datapack lives under `tests/heartstakes-testpack` and is never included in the player release ZIP.
+
 ## Goals
 
 - Catch malformed JSON, invalid folder names, and invalid `.mcfunction` commands before release.

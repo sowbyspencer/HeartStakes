@@ -1,0 +1,97 @@
+name: Minecraft integration tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Minecraft ${{ matrix.minecraft_version }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        minecraft_version:
+          - 1.21.7
+          - 1.21.8
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download Fabric server and test dependencies
+        shell: bash
+        env:
+          MC_VERSION: ${{ matrix.minecraft_version }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ci-server/mods ci-server/world/datapacks
+
+          loader_version="$(curl --fail --silent --show-error \
+            "https://meta.fabricmc.net/v2/versions/loader/${MC_VERSION}" \
+            | jq -r 'map(select(.loader.stable == true))[0].loader.version')"
+          if [[ -z "$loader_version" || "$loader_version" == "null" ]]; then
+            echo "Could not find a stable Fabric loader for $MC_VERSION" >&2
+            exit 1
+          fi
+
+          server_url="https://meta.fabricmc.net/v2/versions/loader/${MC_VERSION}/${loader_version}/server/jar"
+          curl --fail --location --silent --show-error "$server_url" -o ci-server/server.jar
+
+          fabric_api_url="$(curl --fail --silent --show-error \
+            'https://api.modrinth.com/v2/project/P7dR8mSH/version' \
+            | jq -r --arg mc "$MC_VERSION" \
+              'map(select((.game_versions | index($mc)) != null and (.loaders | index("fabric")) != null))[0].files | map(select(.primary == true))[0].url // .[0].url')"
+          packtest_url="$(curl --fail --silent --show-error \
+            'https://api.modrinth.com/v2/project/XsKUhp45/version' \
+            | jq -r --arg mc "$MC_VERSION" \
+              'map(select((.game_versions | index($mc)) != null and (.loaders | index("fabric")) != null))[0].files | map(select(.primary == true))[0].url // .[0].url')"
+
+          if [[ -z "$fabric_api_url" || "$fabric_api_url" == "null" ]]; then
+            echo "Could not find Fabric API for $MC_VERSION" >&2
+            exit 1
+          fi
+          if [[ -z "$packtest_url" || "$packtest_url" == "null" ]]; then
+            echo "Could not find PackTest for $MC_VERSION" >&2
+            exit 1
+          fi
+
+          curl --fail --location --silent --show-error "$fabric_api_url" -o ci-server/mods/fabric-api.jar
+          curl --fail --location --silent --show-error "$packtest_url" -o ci-server/mods/packtest.jar
+
+      - name: Install datapacks under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -r HeartStakes ci-server/world/datapacks/HeartStakes
+          cp -r tests/heartstakes-testpack ci-server/world/datapacks/heartstakes-tests
+
+      - name: Run PackTest integration suite
+        working-directory: ci-server
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -Xmx2G \
+            -Dpacktest.auto \
+            -Dpacktest.auto.annotations \
+            -jar server.jar nogui
+
+      - name: Upload integration logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs-${{ matrix.minecraft_version }}
+          path: |
+            ci-server/logs/
+            ci-server/crash-reports/
+          if-no-files-found: ignore
