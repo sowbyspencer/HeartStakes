@@ -48,6 +48,10 @@ HeartStakes/
 
 The datapack uses the singular 1.21+ folder names `function`, `advancement`, and `tags/function`.
 
+## CI/CD testing plan
+
+The planned GitHub Actions validation and integration-test pipeline is documented in [CI_CD_PLAN.md](CI_CD_PLAN.md). It covers JSON and command validation, headless Minecraft tests for Java Edition 1.21.7 and 1.21.8, ZIP packaging, and tag-based release publishing.
+
 ## Supported versions
 
 The current `pack_format: 81` officially supports Minecraft Java Edition **1.21.7 and 1.21.8**. It is not officially updated for 1.21.9 or later releases, which use newer data-pack formats and may require a compatibility update.
