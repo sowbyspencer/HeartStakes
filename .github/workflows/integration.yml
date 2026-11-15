@@ -90,7 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          java -Xmx2G \
+          timeout --foreground --signal=TERM 90s java -Xmx2G \
             -Dpacktest.auto \
             -Dpacktest.auto.annotations \
             -jar server.jar nogui

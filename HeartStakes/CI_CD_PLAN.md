@@ -2,6 +2,28 @@
 
 This plan describes a GitHub Actions pipeline for validating and publishing the HeartStakes Minecraft Java Edition datapack.
 
+## Run the integration tests locally
+
+The integration workflow runs a Fabric server with the PackTest mod. It needs Java 21, `curl`, and `jq`.
+
+From the repository root, prepare a server directory using the same download and installation commands in `.github/workflows/integration.yml`, then run:
+
+```bash
+cd ci-server
+timeout --foreground --signal=TERM 90s java -Xmx2G \
+  -Dpacktest.auto \
+  -Dpacktest.auto.annotations \
+  -jar server.jar nogui
+```
+
+PackTest exits with a status equal to the number of failed tests. A status of `0` means the suite passed. The `timeout` wrapper stops a server that remains running for 90 seconds, which makes a hang fail clearly instead of waiting for the GitHub job limit.
+
+On Windows, run the same Java command from WSL or Git Bash after preparing `ci-server`. In PowerShell, the equivalent is:
+
+```powershell
+java -Xmx2G -Dpacktest.auto -Dpacktest.auto.annotations -jar server.jar nogui
+```
+
 The integration-test implementation uses the server-side Fabric [PackTest](https://modrinth.com/mod/packtest) mod. PackTest provides `.mcfunction` tests, assertions, dummy players, automatic test execution, and a nonzero process exit code when a test fails. The test-only datapack lives under `tests/heartstakes-testpack` and is never included in the player release ZIP.
 
 ## Goals
