@@ -10,15 +10,19 @@ permissions:
 
 jobs:
   integration:
-    name: Minecraft ${{ matrix.minecraft_version }}
+    name: Minecraft ${{ matrix.minecraft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     strategy:
       fail-fast: false
       matrix:
-        minecraft_version:
-          - 1.21.7
-          - 1.21.8
+        include:
+          - minecraft: 1.21.7
+            fabric_api: 0.129.0+1.21.7
+            packtest: 2.2.0
+          - minecraft: 1.21.8
+            fabric_api: 0.136.1+1.21.8
+            packtest: 2.2.0
 
     steps:
       - name: Check out repository
@@ -33,11 +37,15 @@ jobs:
       - name: Download Fabric server and test dependencies
         shell: bash
         env:
-          MC_VERSION: ${{ matrix.minecraft_version }}
+          MC_VERSION: ${{ matrix.minecraft }}
         run: |
           set -euo pipefail
 
           mkdir -p ci-server/mods ci-server/world/datapacks
+
+          MC_VERSION="${{ matrix.minecraft }}"
+          FABRIC_API_VERSION="${{ matrix.fabric_api }}"
+          PACKTEST_VERSION="${{ matrix.packtest }}"
 
           loader_version="$(curl --fail --silent --show-error \
             "https://meta.fabricmc.net/v2/versions/loader/${MC_VERSION}" \
@@ -60,12 +68,12 @@ jobs:
 
           fabric_api_url="$(curl --fail --silent --show-error \
             'https://api.modrinth.com/v2/project/P7dR8mSH/version' \
-            | jq -r --arg mc "$MC_VERSION" \
-              'map(select((.game_versions | index($mc)) != null and (.loaders | index("fabric")) != null))[0].files | map(select(.primary == true))[0].url // .[0].url')"
+            | jq -r --arg version "$FABRIC_API_VERSION" \
+              'map(select(.version_number == $version))[0].files | map(select(.primary == true))[0].url')"
           packtest_url="$(curl --fail --silent --show-error \
             'https://api.modrinth.com/v2/project/XsKUhp45/version' \
-            | jq -r --arg mc "$MC_VERSION" \
-              'map(select((.game_versions | index($mc)) != null and (.loaders | index("fabric")) != null))[0].files | map(select(.primary == true))[0].url // .[0].url')"
+            | jq -r --arg version "$PACKTEST_VERSION" \
+              'map(select(.version_number == $version))[0].files | map(select(.primary == true))[0].url')"
 
           if [[ -z "$fabric_api_url" || "$fabric_api_url" == "null" ]]; then
             echo "Could not find Fabric API for $MC_VERSION" >&2
@@ -100,7 +108,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-logs-${{ matrix.minecraft_version }}
+          name: integration-logs-${{ matrix.minecraft }}
           path: |
             ci-server/logs/
             ci-server/crash-reports/
