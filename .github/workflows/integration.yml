@@ -45,7 +45,15 @@ jobs:
             exit 1
           fi
 
-          server_url="https://meta.fabricmc.net/v2/versions/loader/${MC_VERSION}/${loader_version}/server/jar"
+          installer_version="$(curl --fail --silent --show-error \
+            'https://meta.fabricmc.net/v2/versions/installer' \
+            | jq -r 'map(select(.stable == true))[0].version')"
+          if [[ -z "$installer_version" || "$installer_version" == "null" ]]; then
+            echo "Could not find a stable Fabric installer" >&2
+            exit 1
+          fi
+
+          server_url="https://meta.fabricmc.net/v2/versions/loader/${MC_VERSION}/${loader_version}/${installer_version}/server/jar"
           curl --fail --location --silent --show-error "$server_url" -o ci-server/server.jar
 
           fabric_api_url="$(curl --fail --silent --show-error \
