@@ -1,0 +1,94 @@
+name: Static validation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate datapack
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate HeartStakes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pack_root="HeartStakes"
+
+          required_directories=(
+            "$pack_root"
+            "$pack_root/data"
+            "$pack_root/data/minecraft"
+            "$pack_root/data/minecraft/tags"
+            "$pack_root/data/minecraft/tags/function"
+            "$pack_root/data/heartstakes"
+            "$pack_root/data/heartstakes/advancement"
+            "$pack_root/data/heartstakes/function"
+          )
+
+          required_files=(
+            "$pack_root/pack.mcmeta"
+            "$pack_root/README.md"
+            "$pack_root/data/minecraft/tags/function/load.json"
+            "$pack_root/data/minecraft/tags/function/tick.json"
+            "$pack_root/data/heartstakes/advancement/eat_enchanted_apple.json"
+            "$pack_root/data/heartstakes/function/load.mcfunction"
+            "$pack_root/data/heartstakes/function/tick.mcfunction"
+            "$pack_root/data/heartstakes/function/on_death.mcfunction"
+            "$pack_root/data/heartstakes/function/on_eat_apple.mcfunction"
+          )
+
+          for required_directory in "${required_directories[@]}"; do
+            if [[ ! -d "$required_directory" ]]; then
+              echo "Missing required directory: $required_directory" >&2
+              exit 1
+            fi
+          done
+
+          for required_file in "${required_files[@]}"; do
+            if [[ ! -f "$required_file" ]]; then
+              echo "Missing required file: $required_file" >&2
+              exit 1
+            fi
+          done
+
+          if [[ ! -f "$pack_root/pack.mcmeta" ]]; then
+            echo "Missing pack.mcmeta" >&2
+            exit 1
+          fi
+
+          if ! jq empty "$pack_root/pack.mcmeta"; then
+            echo "Invalid JSON: $pack_root/pack.mcmeta" >&2
+            exit 1
+          fi
+
+          while IFS= read -r -d '' json_file; do
+            if ! jq empty "$json_file"; then
+              echo "Invalid JSON: $json_file" >&2
+              exit 1
+            fi
+          done < <(find "$pack_root" -type f -name '*.json' -print0)
+
+          pack_format="$(jq -r '.pack.pack_format // empty' "$pack_root/pack.mcmeta")"
+          if [[ "$pack_format" != "81" ]]; then
+            echo "Expected pack_format 81, found: ${pack_format:-missing}" >&2
+            exit 1
+          fi
+
+          deprecated_directory="$(find "$pack_root" -type d \( -name 'functions' -o -name 'advancements' \) -print -quit)"
+          if [[ -n "$deprecated_directory" ]]; then
+            echo "Deprecated directory name found: $deprecated_directory" >&2
+            exit 1
+          fi
+
+          if grep -RIn --exclude-dir=.git -E 'generic\.max_health' "$pack_root"; then
+            echo "Deprecated attribute name generic.max_health found." >&2
+            exit 1
+          fi
+
+          echo "HeartStakes static validation passed."
