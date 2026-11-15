@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   integration:
-    name: Minecraft ${{ matrix.minecraft }}
+    name: Minecraft ${{ matrix.minecraft }} - ${{ matrix.fixture }}
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     strategy:
@@ -20,9 +20,35 @@ jobs:
           - minecraft: 1.21.7
             fabric_api: 0.129.0+1.21.7
             packtest: 2.2.0
+            fixture: apple_reward
+          - minecraft: 1.21.7
+            fabric_api: 0.129.0+1.21.7
+            packtest: 2.2.0
+            fixture: death_penalty
+          - minecraft: 1.21.7
+            fabric_api: 0.129.0+1.21.7
+            packtest: 2.2.0
+            fixture: minimum_health_floor
+          - minecraft: 1.21.7
+            fabric_api: 0.129.0+1.21.7
+            packtest: 2.2.0
+            fixture: player_isolation
           - minecraft: 1.21.8
             fabric_api: 0.136.1+1.21.8
             packtest: 2.2.0
+            fixture: apple_reward
+          - minecraft: 1.21.8
+            fabric_api: 0.136.1+1.21.8
+            packtest: 2.2.0
+            fixture: death_penalty
+          - minecraft: 1.21.8
+            fabric_api: 0.136.1+1.21.8
+            packtest: 2.2.0
+            fixture: minimum_health_floor
+          - minecraft: 1.21.8
+            fabric_api: 0.136.1+1.21.8
+            packtest: 2.2.0
+            fixture: player_isolation
 
     steps:
       - name: Check out repository
@@ -93,6 +119,10 @@ jobs:
           set -euo pipefail
           cp -r HeartStakes ci-server/world/datapacks/HeartStakes
           cp -r tests/heartstakes-testpack ci-server/world/datapacks/heartstakes-tests
+          find ci-server/world/datapacks/heartstakes-tests/data/heartstakes/test \
+            -name '*.mcfunction' \
+            ! -name '${{ matrix.fixture }}.mcfunction' \
+            -delete
 
       - name: Run PackTest integration suite
         working-directory: ci-server
@@ -108,7 +138,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-logs-${{ matrix.minecraft }}
+          name: integration-logs-${{ matrix.minecraft }}-${{ matrix.fixture }}
           path: |
             ci-server/logs/
             ci-server/crash-reports/
