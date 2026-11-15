@@ -87,7 +87,7 @@ jobs:
           fi
 
           if grep -RIn --exclude-dir=.git -E 'generic\.max_health' "$pack_root"; then
-            echo "Deprecated attribute name generic.max_health found." >&2
+            echo "Deprecated attribute name generic.max_health found" >&2
             exit 1
           fi
 
