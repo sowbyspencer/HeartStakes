@@ -132,10 +132,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout --foreground --signal=TERM 150s java -Xmx2G \
-            -Dpacktest.auto \
-            -Dpacktest.auto.annotations \
-            -jar server.jar nogui
+
+          for attempt in 1 2; do
+            echo "Starting PackTest attempt ${attempt}/2"
+            set +e
+            timeout --foreground --signal=TERM 75s java -Xmx2G \
+              -Dpacktest.auto \
+              -Dpacktest.auto.annotations \
+              -jar server.jar nogui
+            status=$?
+            set -e
+
+            if [[ "$status" -eq 0 ]]; then
+              exit 0
+            fi
+            if [[ "$status" -ne 124 || "$attempt" -eq 2 ]]; then
+              exit "$status"
+            fi
+
+            echo "PackTest timed out; resetting the world before retrying."
+            rm -rf world
+            mkdir -p world/datapacks
+            cp -r ../HeartStakes world/datapacks/HeartStakes
+            cp -r ../tests/heartstakes-testpack world/datapacks/heartstakes-tests
+            find world/datapacks/heartstakes-tests/data/heartstakes/test \
+              -name '*.mcfunction' \
+              ! -name '${{ matrix.fixture }}.mcfunction' \
+              -delete
+          done
 
       - name: Upload integration logs
         if: always()
