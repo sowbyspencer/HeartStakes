@@ -1,0 +1,80 @@
+name: Package datapack
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build HeartStakes ZIP
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Build ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -f HeartStakes.zip
+          zip -r HeartStakes.zip HeartStakes
+
+      - name: Validate ZIP contents
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f HeartStakes.zip
+          unzip -t HeartStakes.zip
+          validation_dir="$(mktemp -d)"
+          trap 'rm -rf "$validation_dir"' EXIT
+          unzip -q HeartStakes.zip -d "$validation_dir"
+
+          packaged_root="$validation_dir/HeartStakes"
+          test -d "$packaged_root"
+
+          required_entries=(
+            "HeartStakes/pack.mcmeta"
+            "HeartStakes/README.md"
+            "HeartStakes/data/minecraft/tags/function/load.json"
+            "HeartStakes/data/minecraft/tags/function/tick.json"
+            "HeartStakes/data/heartstakes/advancement/eat_enchanted_apple.json"
+            "HeartStakes/data/heartstakes/function/load.mcfunction"
+            "HeartStakes/data/heartstakes/function/tick.mcfunction"
+            "HeartStakes/data/heartstakes/function/on_death.mcfunction"
+            "HeartStakes/data/heartstakes/function/on_eat_apple.mcfunction"
+          )
+
+          for required_entry in "${required_entries[@]}"; do
+            if [[ ! -f "$validation_dir/$required_entry" ]]; then
+              echo "Missing required packaged file: $required_entry" >&2
+              exit 1
+            fi
+          done
+
+          if find "$packaged_root" -type d \( -name 'functions' -o -name 'advancements' \) -print -quit | grep -q .; then
+            echo "Deprecated plural datapack directory found in packaged ZIP." >&2
+            exit 1
+          fi
+
+          if grep -RIn --include='*.mcfunction' 'generic\.max_health' "$packaged_root"; then
+            echo "Deprecated attribute name generic.max_health found in packaged ZIP." >&2
+            exit 1
+          fi
+
+          echo "HeartStakes.zip contents validated."
+
+      - name: Upload packaged datapack
+        uses: actions/upload-artifact@v4
+        with:
+          name: HeartStakes
+          path: HeartStakes.zip
+          if-no-files-found: error
