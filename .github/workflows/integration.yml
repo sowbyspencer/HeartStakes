@@ -1,0 +1,209 @@
+name: Minecraft integration tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Minecraft ${{ matrix.minecraft }} - ${{ matrix.fixture }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - minecraft: 1.21.7
+            fabric_api: 0.129.0+1.21.7
+            packtest: 2.2.0
+            fixture: apple_reward
+          - minecraft: 1.21.7
+            fabric_api: 0.129.0+1.21.7
+            packtest: 2.2.0
+            fixture: death_penalty
+          - minecraft: 1.21.7
+            fabric_api: 0.129.0+1.21.7
+            packtest: 2.2.0
+            fixture: minimum_health_floor
+          - minecraft: 1.21.7
+            fabric_api: 0.129.0+1.21.7
+            packtest: 2.2.0
+            fixture: player_isolation
+          - minecraft: 1.21.8
+            fabric_api: 0.136.1+1.21.8
+            packtest: 2.2.0
+            fixture: apple_reward
+          - minecraft: 1.21.8
+            fabric_api: 0.136.1+1.21.8
+            packtest: 2.2.0
+            fixture: death_penalty
+          - minecraft: 1.21.8
+            fabric_api: 0.136.1+1.21.8
+            packtest: 2.2.0
+            fixture: minimum_health_floor
+          - minecraft: 1.21.8
+            fabric_api: 0.136.1+1.21.8
+            packtest: 2.2.0
+            fixture: player_isolation
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download Fabric server and test dependencies
+        shell: bash
+        env:
+          MC_VERSION: ${{ matrix.minecraft }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ci-server/mods ci-server/world/datapacks
+
+          MC_VERSION="${{ matrix.minecraft }}"
+          FABRIC_API_VERSION="${{ matrix.fabric_api }}"
+          PACKTEST_VERSION="${{ matrix.packtest }}"
+
+          loader_version="$(curl --fail --silent --show-error \
+            "https://meta.fabricmc.net/v2/versions/loader/${MC_VERSION}" \
+            | jq -r 'map(select(.loader.stable == true))[0].loader.version')"
+          if [[ -z "$loader_version" || "$loader_version" == "null" ]]; then
+            echo "Could not find a stable Fabric loader for $MC_VERSION" >&2
+            exit 1
+          fi
+
+          installer_version="$(curl --fail --silent --show-error \
+            'https://meta.fabricmc.net/v2/versions/installer' \
+            | jq -r 'map(select(.stable == true))[0].version')"
+          if [[ -z "$installer_version" || "$installer_version" == "null" ]]; then
+            echo "Could not find a stable Fabric installer" >&2
+            exit 1
+          fi
+
+          server_url="https://meta.fabricmc.net/v2/versions/loader/${MC_VERSION}/${loader_version}/${installer_version}/server/jar"
+          curl --fail --location --silent --show-error "$server_url" -o ci-server/server.jar
+
+          fabric_api_url="$(curl --fail --silent --show-error \
+            'https://api.modrinth.com/v2/project/P7dR8mSH/version' \
+            | jq -r --arg version "$FABRIC_API_VERSION" \
+              'map(select(.version_number == $version))[0].files | map(select(.primary == true))[0].url')"
+          packtest_url="$(curl --fail --silent --show-error \
+            'https://api.modrinth.com/v2/project/XsKUhp45/version' \
+            | jq -r --arg version "$PACKTEST_VERSION" \
+              'map(select(.version_number == $version))[0].files | map(select(.primary == true))[0].url')"
+
+          if [[ -z "$fabric_api_url" || "$fabric_api_url" == "null" ]]; then
+            echo "Could not find Fabric API for $MC_VERSION" >&2
+            exit 1
+          fi
+          if [[ -z "$packtest_url" || "$packtest_url" == "null" ]]; then
+            echo "Could not find PackTest for $MC_VERSION" >&2
+            exit 1
+          fi
+
+          curl --fail --location --silent --show-error "$fabric_api_url" -o ci-server/mods/fabric-api.jar
+          curl --fail --location --silent --show-error "$packtest_url" -o ci-server/mods/packtest.jar
+
+      - name: Install datapacks under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -r HeartStakes ci-server/world/datapacks/HeartStakes
+          cp -r tests/heartstakes-testpack ci-server/world/datapacks/heartstakes-tests
+          find ci-server/world/datapacks/heartstakes-tests/data/heartstakes/test \
+            -name '*.mcfunction' \
+            ! -name '${{ matrix.fixture }}.mcfunction' \
+            -delete
+
+      - name: Run PackTest integration suite
+        working-directory: ci-server
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+
+          run_packtest_attempt() {
+            local attempt="$1"
+            local console_log="diagnostics/packtest-${attempt}.log"
+            local thread_dump="diagnostics/thread-dump-${attempt}.txt"
+            local server_pid
+
+            java -Xmx2G \
+              -Dpacktest.auto \
+              -Dpacktest.auto.annotations \
+              -jar server.jar nogui \
+              >"$console_log" 2>&1 &
+            server_pid=$!
+
+            for _ in $(seq 1 75); do
+              if ! kill -0 "$server_pid" 2>/dev/null; then
+                wait "$server_pid"
+                local status=$?
+                cat "$console_log"
+                return "$status"
+              fi
+              sleep 1
+            done
+
+            echo "PackTest timed out; capturing JVM thread dump for PID $server_pid." >&2
+            if command -v jcmd >/dev/null 2>&1; then
+              jcmd "$server_pid" Thread.print -l >"$thread_dump" 2>&1 || true
+            else
+              kill -QUIT "$server_pid" 2>/dev/null || true
+            fi
+
+            kill -TERM "$server_pid" 2>/dev/null || true
+            sleep 5
+            kill -KILL "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+            cat "$console_log"
+            return 124
+          }
+
+          for attempt in 1 2; do
+            echo "Starting PackTest attempt ${attempt}/2"
+            set +e
+            run_packtest_attempt "$attempt"
+            status="$?"
+            set -e
+
+            if [[ "$status" -eq 0 ]]; then
+              exit 0
+            fi
+            if [[ "$status" -ne 124 || "$attempt" -eq 2 ]]; then
+              exit "$status"
+            fi
+
+            echo "PackTest timed out; resetting the world before retrying."
+            rm -rf world
+            mkdir -p world/datapacks
+            cp -r ../HeartStakes world/datapacks/HeartStakes
+            cp -r ../tests/heartstakes-testpack world/datapacks/heartstakes-tests
+            find world/datapacks/heartstakes-tests/data/heartstakes/test \
+              -name '*.mcfunction' \
+              ! -name '${{ matrix.fixture }}.mcfunction' \
+              -delete
+          done
+
+      - name: Upload integration logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs-${{ matrix.minecraft }}-${{ matrix.fixture }}
+          path: |
+            ci-server/logs/
+            ci-server/crash-reports/
+            ci-server/diagnostics/
+          if-no-files-found: ignore

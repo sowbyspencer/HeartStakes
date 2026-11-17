@@ -1,0 +1,17 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "HeartStakes: integration tests (1.21.7)",
+      "type": "shell",
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-integration-tests.ps1 1.21.7",
+      "problemMatcher": []
+    },
+    {
+      "label": "HeartStakes: integration tests (1.21.8)",
+      "type": "shell",
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-integration-tests.ps1 1.21.8",
+      "problemMatcher": []
+    }
+  ]
+}
