@@ -1,0 +1,58 @@
+name: Publish HeartStakes release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Static validation
+    uses: ./.github/workflows/validate.yml
+    permissions:
+      contents: read
+
+  integration:
+    name: Minecraft integration tests
+    needs: validate
+    uses: ./.github/workflows/integration.yml
+    permissions:
+      contents: read
+
+  package:
+    name: Package datapack
+    needs: [validate, integration]
+    uses: ./.github/workflows/package.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish GitHub release
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packaged datapack
+        uses: actions/download-artifact@v5
+        with:
+          name: HeartStakes
+          path: release-artifact
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          test -f release-artifact/HeartStakes.zip
+          gh release create "${GITHUB_REF_NAME}" \
+            release-artifact/HeartStakes.zip \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "HeartStakes ${GITHUB_REF_NAME}" \
+            --notes "HeartStakes datapack release for Minecraft Java Edition 1.21.7 and 1.21.8."
