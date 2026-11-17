@@ -132,15 +132,51 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p diagnostics
+
+          run_packtest_attempt() {
+            local attempt="$1"
+            local console_log="diagnostics/packtest-${attempt}.log"
+            local thread_dump="diagnostics/thread-dump-${attempt}.txt"
+            local server_pid
+
+            java -Xmx2G \
+              -Dpacktest.auto \
+              -Dpacktest.auto.annotations \
+              -jar server.jar nogui \
+              >"$console_log" 2>&1 &
+            server_pid=$!
+
+            for _ in $(seq 1 75); do
+              if ! kill -0 "$server_pid" 2>/dev/null; then
+                wait "$server_pid"
+                local status=$?
+                cat "$console_log"
+                return "$status"
+              fi
+              sleep 1
+            done
+
+            echo "PackTest timed out; capturing JVM thread dump for PID $server_pid." >&2
+            if command -v jcmd >/dev/null 2>&1; then
+              jcmd "$server_pid" Thread.print -l >"$thread_dump" 2>&1 || true
+            else
+              kill -QUIT "$server_pid" 2>/dev/null || true
+            fi
+
+            kill -TERM "$server_pid" 2>/dev/null || true
+            sleep 5
+            kill -KILL "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+            cat "$console_log"
+            return 124
+          }
 
           for attempt in 1 2; do
             echo "Starting PackTest attempt ${attempt}/2"
             set +e
-            timeout --foreground --signal=TERM 75s java -Xmx2G \
-              -Dpacktest.auto \
-              -Dpacktest.auto.annotations \
-              -jar server.jar nogui
-            status=$?
+            run_packtest_attempt "$attempt"
+            status="$?"
             set -e
 
             if [[ "$status" -eq 0 ]]; then
@@ -169,4 +205,5 @@ jobs:
           path: |
             ci-server/logs/
             ci-server/crash-reports/
+            ci-server/diagnostics/
           if-no-files-found: ignore
