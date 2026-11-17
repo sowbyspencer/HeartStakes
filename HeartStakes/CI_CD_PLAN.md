@@ -173,6 +173,7 @@ Use separate workflows so failures are easy to understand:
 └── workflows/
     ├── validate.yml       # JSON, structure, metadata, and command linting
     ├── integration.yml    # Headless Minecraft version matrix
+    ├── package.yml        # Build and upload the datapack ZIP artifact
     └── release.yml        # Package and publish version tags
 ```
 
