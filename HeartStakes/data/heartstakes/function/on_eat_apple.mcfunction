@@ -9,4 +9,5 @@ function heartstakes:set_max_health with storage heartstakes:runtime
 
 # Give subtle positive feedback.
 playsound minecraft:entity.player.levelup player @s ~ ~ ~ 0.5 1.2
+title @s times 0 280 0
 title @s actionbar {"text":"+1 heart","color":"gold"}
