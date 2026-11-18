@@ -2,7 +2,9 @@
 execute store result score @s hs_max run attribute @s minecraft:max_health base get
 
 # Notify the player and remove 1 health point (0.5 hearts) when at least 1 full heart remains.
+execute if score @s hs_max matches ..1 run title @s times 0 280 0
 execute if score @s hs_max matches ..1 run title @s actionbar {"text":"Death penalty: minimum 0.5 hearts","color":"dark_red"}
+execute if score @s hs_max matches 2.. run title @s times 0 280 0
 execute if score @s hs_max matches 2.. run title @s actionbar {"text":"Death penalty: -0.5 hearts","color":"dark_red"}
 execute if score @s hs_max matches 2.. run scoreboard players remove @s hs_max 1
 
